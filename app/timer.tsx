@@ -126,7 +126,7 @@ export default function TimerScreen() {
 
   const orderedTemplates = useMemo(() => templates.slice().reverse(), [templates]);
   const cardStride = TEMPLATE_CARD_WIDTH + TEMPLATE_CARD_SPACING;
-
+  console.log("Selected sound",selectedSound)
   const scrollToTemplate = (index: number, animated = true) => {
     if (!templatesScrollRef.current) return;
     templatesScrollRef.current.scrollTo({
@@ -309,8 +309,7 @@ export default function TimerScreen() {
       const length = SOUND_LIBRARY.length;
       const offset = direction === 'prev' ? -1 : 1;
       const nextIndex = (prev + offset + length) % length;
-      const nextSound = SOUND_LIBRARY[nextIndex];
-      setSelectedSound(nextSound);
+      // const nextSound = SOUND_LIBRARY[nextIndex];
       return nextIndex;
     });
   };
@@ -691,9 +690,9 @@ export default function TimerScreen() {
                         <View style={styles.soundTitleRow}>
                           <Text style={styles.soundName}>{sound.name}</Text>
                           {isSelected && (
-                            <Text style={[styles.selectedBadge, { color: sound.accentColor }]}>
-                              Selected
-                            </Text>
+                          <Text style={[styles.selectedBadge, { color: sound.accentColor }]}>
+                            Selected
+                          </Text>
                           )}
                         </View>
                         <Text style={styles.soundDescription}>{sound.description}</Text>
@@ -1189,12 +1188,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   soundName: {
     fontSize: 18,
     fontWeight: '600',
     color: '#1d3557',
-    letterSpacing: 1,
+    letterSpacing: 0.3,
   },
   selectedBadge: {
     fontSize: 12,
