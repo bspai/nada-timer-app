@@ -6,7 +6,6 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +20,7 @@ import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getTemplates, saveTemplate, deleteTemplate, Template } from '../utils/storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type SoundAttribution = {
   title: string;
@@ -110,7 +110,8 @@ export default function TimerScreen() {
   const [secondsLeft, setSecondsLeft] = useState(presetMinutes * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [selectedSound, setSelectedSound] = useState<SoundOption>(SOUND_LIBRARY[0]);
-  const [visibleSoundIndex, setVisibleSoundIndex] = useState(0);
+  const [showSoundPicker, setShowSoundPicker] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const soundRef = useRef<Audio.Sound | null>(null);
   const previewSoundRef = useRef<Audio.Sound | null>(null);
   const previewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -295,25 +296,17 @@ export default function TimerScreen() {
     });
   }, [orderedTemplates.length]);
 
-  const handleSoundSelect = async (soundOption: SoundOption) => {
-    setSelectedSound(soundOption);
-    const newIndex = SOUND_LIBRARY.findIndex((entry) => entry.id === soundOption.id);
-    if (newIndex !== -1) {
-      setVisibleSoundIndex(newIndex);
-    }
+  const openSoundPicker = () => setShowSoundPicker(true);
+  const closeSoundPicker = () => setShowSoundPicker(false);
+
+  const handleSoundPreview = async (soundOption: SoundOption) => {
     await playPreview(soundOption);
   };
 
-  const handleMoveSound = (direction: 'prev' | 'next') => {
-    setVisibleSoundIndex((prev) => {
-      const length = SOUND_LIBRARY.length;
-      const offset = direction === 'prev' ? -1 : 1;
-      const nextIndex = (prev + offset + length) % length;
-      // const nextSound = SOUND_LIBRARY[nextIndex];
-      return nextIndex;
-    });
+  const handleSelectSoundFromPicker = async (soundOption: SoundOption) => {
+    setSelectedSound(soundOption);
+    closeSoundPicker();
   };
-
   const handleStartPause = () => {
     stopPreview();
     if (secondsLeft === 0) {
@@ -337,9 +330,6 @@ export default function TimerScreen() {
     if (soundMatch) {
       setSelectedSound(soundMatch);
       const nextIndex = SOUND_LIBRARY.findIndex((entry) => entry.id === soundMatch.id);
-      if (nextIndex !== -1) {
-        setVisibleSoundIndex(nextIndex);
-      }
     } else {
       Alert.alert('Sound unavailable', 'The saved sound is no longer in the library.');
     }
@@ -482,16 +472,181 @@ export default function TimerScreen() {
   const dashOffset = CIRCUMFERENCE * (1 - progress);
 
   return (
-    <LinearGradient colors={['#fefbf4', '#eaf2ef', '#dbe4ea']} style={styles.gradient}>
+    <LinearGradient colors={['#fefbf4', '#f1ede1']} style={styles.gradient}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.overline}>Mindful focus</Text>
-          <Text style={styles.heading}>Nada Timer</Text>
-          <Text style={styles.description}>
-            Let the timer keep gentle track of the moment, with soothing music in the background.
-          </Text>
+        <View style={styles.headerBar}>
+          <Pressable
+            style={styles.hamburgerButton}
+            accessibilityLabel="Open menu"
+            onPress={() => setIsSidebarOpen(true)}
+          >
+            <MaterialIcons name="menu" size={28} color="#1d3557" />
+          </Pressable>
+          <Text style={styles.headerTitle}>Nada Timer</Text>
+        </View>
+        <Modal
+          visible={showSoundPicker}
+          animationType="slide"
+          transparent
+          onRequestClose={closeSoundPicker}
+        >
+          <View style={styles.soundPickerOverlay}>
+            <Pressable style={styles.soundPickerBackdrop} onPress={closeSoundPicker} />
+            <View style={styles.soundPickerCard}>
+              <View style={styles.soundPickerHeader}>
+                <Text style={styles.soundPickerTitle}>Choose a background sound</Text>
+                <Pressable style={styles.soundPickerClose} onPress={closeSoundPicker}>
+                  <MaterialIcons name="close" size={22} color="#4c7c7a" />
+                </Pressable>
+              </View>
+              <ScrollView contentContainerStyle={styles.soundPickerList}>
+                {SOUND_LIBRARY.map((sound) => {
+                  const isSelected = sound.id === selectedSound.id;
+                  return (
+                    <Pressable
+                      key={sound.id}
+                      style={[styles.soundPickerRow, isSelected && styles.soundPickerRowActive]}
+                      onPress={() => handleSelectSoundFromPicker(sound)}
+                    >
+                      <View>
+                        <Text style={styles.soundPickerText}>{sound.name}</Text>
+                        <Text style={styles.soundPickerDescription}>{sound.description}</Text>
+                      </View>
+                      <View style={styles.soundPickerActions}>
+                        <Pressable
+                          style={styles.soundPickerPreviewButton}
+                          onPress={() => handleSoundPreview(sound)}
+                        >
+                          <MaterialIcons name="play-arrow" size={18} color="#4c7c7a" />
+                        </Pressable>
+                        {isSelected && (
+                          <MaterialIcons name="check-circle" size={22} color="#4c7c7a" />
+                        )}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.timerCard}>
+            <Text style={styles.subtitle}>Mindful focus companion</Text>
+            <Text style={styles.description}>
+              Let the timer keep gentle track of the moment, with soothing music in the background.
+            </Text>
+            <View style={styles.ringWrapper}>
+              <Svg width={RING_SIZE} height={RING_SIZE}>
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RADIUS}
+                  stroke="#c0d6d3"
+                  strokeDasharray="8,12"
+                  strokeWidth={4}
+                  fill="none"
+                />
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RADIUS}
+                  stroke="#6ba7a0"
+                  strokeWidth={STROKE_WIDTH}
+                  strokeDasharray={`${CIRCUMFERENCE}, ${CIRCUMFERENCE}`}
+                  strokeDashoffset={dashOffset}
+                  strokeLinecap="round"
+                  fill="none"
+                  rotation="-90"
+                  origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+                />
+              </Svg>
+              <View style={styles.timerTextWrapper}>
+                <Text style={styles.timerValue}>{formatTime(secondsLeft)}</Text>
+                <Text style={styles.timerLabel}>remaining</Text>
+              </View>
+            </View>
+          
+            <View style={styles.buttonRow}>
+              <Pressable style={styles.primaryButton} onPress={handleStartPause}>
+                <Text style={styles.primaryButtonText}>
+                  {isRunning ? 'Pause' : secondsLeft === 0 ? 'Restart' : 'Start'}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.secondaryButton} onPress={handleReset}>
+                <Text style={styles.secondaryButtonText}>Reset</Text>
+              </Pressable>
+            </View>
+          </View>
 
-          <View style={styles.templatesSection}>
+          <View style={styles.controlsCard}>
+            <Text style={styles.sliderLabel}>Session length (minutes)</Text>
+            <Slider
+              minimumValue={TIMER_MIN}
+              maximumValue={TIMER_MAX}
+              step={TIMER_STEP}
+              value={presetMinutes}
+              disabled={isRunning}
+              onValueChange={(value) => {
+                const minutes = Math.round(value);
+                setPresetMinutes(minutes);
+                if (!isRunning) {
+                  setSecondsLeft(minutes * 60);
+                }
+              }}
+              minimumTrackTintColor="#6ba7a0"
+              maximumTrackTintColor="#d4c7b6"
+              thumbTintColor="#4c7c7a"
+            />
+            <Text style={styles.sliderValue}>{presetMinutes} minutes</Text>
+          </View>
+
+          <View style={styles.soundCard}>
+            <View style={styles.soundCardHeader}>
+              <Text style={styles.soundLabel}>Background sound</Text>
+              <Pressable style={styles.soundSearch} onPress={openSoundPicker}>
+                <MaterialIcons name="search" size={20} color="#1d3557" />
+              </Pressable>
+            </View>
+            <View style={styles.soundCarousel}>
+              <View style={styles.soundCardWrapper}>
+                {(() => {
+                  const  sound  = selectedSound;
+                  return (
+                    <LinearGradient
+                      key={sound.id}
+                      colors={sound.backgroundGradient}
+                      style={[
+                        styles.soundCardInner,
+                        { borderColor: sound.accentColor },
+                      ]}
+                    >
+                        <View style={styles.soundTitleRow}>
+                          <Text style={styles.soundName}>{sound.name}</Text>
+                        </View>
+                        <Text style={styles.soundDescription}>{sound.description}</Text>
+                        <Text style={styles.soundDuration}>{sound.durationLabel}</Text>
+                        <Text style={styles.soundHint}>Tap to preview (2s)</Text>
+                    </LinearGradient>
+                  );
+                })()}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.attributionCard}>
+            <Text style={styles.attributionLabel}>Sound attribution</Text>
+            {selectedSound.attribution ? (
+              <Text style={styles.attributionText}>
+                {selectedSound.attribution.title} by {selectedSound.attribution.author}
+                {selectedSound.attribution.license ? ` • ${selectedSound.attribution.license}` : ''}
+              </Text>
+            ) : (
+              <Text style={styles.attributionText}>Royalty-free ambience courtesy of Pixabay.</Text>
+            )}
+          </View>
+
+                    <View style={styles.templatesSection}>
             <View style={styles.templatesHeader}>
               <Text style={styles.templatesLabel}>Saved rituals</Text>
               <Pressable
@@ -594,141 +749,30 @@ export default function TimerScreen() {
             )}
           </View>
 
-          <View style={styles.timerCard}>
-            <View style={styles.ringWrapper}>
-              <Svg width={RING_SIZE} height={RING_SIZE}>
-                <Circle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RADIUS}
-                  stroke="#c0d6d3"
-                  strokeDasharray="8,12"
-                  strokeWidth={4}
-                  fill="none"
-                />
-                <Circle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RADIUS}
-                  stroke="#6ba7a0"
-                  strokeWidth={STROKE_WIDTH}
-                  strokeDasharray={`${CIRCUMFERENCE}, ${CIRCUMFERENCE}`}
-                  strokeDashoffset={dashOffset}
-                  strokeLinecap="round"
-                  fill="none"
-                  rotation="-90"
-                  origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
-                />
-              </Svg>
-              <View style={styles.timerTextWrapper}>
-                <Text style={styles.timerValue}>{formatTime(secondsLeft)}</Text>
-                <Text style={styles.timerLabel}>remaining</Text>
-              </View>
-            </View>
-          
-            <View style={styles.buttonRow}>
-              <Pressable style={styles.primaryButton} onPress={handleStartPause}>
-                <Text style={styles.primaryButtonText}>
-                  {isRunning ? 'Pause' : secondsLeft === 0 ? 'Restart' : 'Start'}
-                </Text>
-              </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={handleReset}>
-                <Text style={styles.secondaryButtonText}>Reset</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.controlsCard}>
-            <Text style={styles.sliderLabel}>Session length (minutes)</Text>
-            <Slider
-              minimumValue={TIMER_MIN}
-              maximumValue={TIMER_MAX}
-              step={TIMER_STEP}
-              value={presetMinutes}
-              disabled={isRunning}
-              onValueChange={(value) => {
-                const minutes = Math.round(value);
-                setPresetMinutes(minutes);
-                if (!isRunning) {
-                  setSecondsLeft(minutes * 60);
-                }
-              }}
-              minimumTrackTintColor="#6ba7a0"
-              maximumTrackTintColor="#d4c7b6"
-              thumbTintColor="#4c7c7a"
-            />
-            <Text style={styles.sliderValue}>{presetMinutes} minutes</Text>
-          </View>
-
-          <View style={styles.soundCard}>
-            <Text style={styles.soundLabel}>Background sound</Text>
-            <View style={styles.soundCarousel}>
-              <Pressable
-                accessibilityLabel="Previous sound"
-                onPress={() => handleMoveSound('prev')}
-                style={styles.carouselButton}
-              >
-                <Text style={styles.carouselButtonText}>‹</Text>
-              </Pressable>
-              <View style={styles.soundCardWrapper}>
-                {SOUND_LIBRARY.map((sound, index) => {
-                  if (index !== visibleSoundIndex) return null;
-                  const isSelected = sound.id === selectedSound.id;
-                  return (
-                    <LinearGradient
-                      key={sound.id}
-                      colors={sound.backgroundGradient}
-                      style={[
-                        styles.soundCardInner,
-                        isSelected && { borderColor: sound.accentColor },
-                      ]}
-                    >
-                      <Pressable
-                        onPress={() => handleSoundSelect(sound)}
-                        style={styles.soundPressable}
-                      >
-                        <View style={styles.soundTitleRow}>
-                          <Text style={styles.soundName}>{sound.name}</Text>
-                          {isSelected && (
-                          <Text style={[styles.selectedBadge, { color: sound.accentColor }]}>
-                            Selected
-                          </Text>
-                          )}
-                        </View>
-                        <Text style={styles.soundDescription}>{sound.description}</Text>
-                        <Text style={styles.soundDuration}>{sound.durationLabel}</Text>
-                        <Text style={styles.soundHint}>Tap to preview (2s)</Text>
-                      </Pressable>
-                    </LinearGradient>
-                  );
-                })}
-              </View>
-              <Pressable
-                accessibilityLabel="Next sound"
-                onPress={() => handleMoveSound('next')}
-                style={styles.carouselButton}
-              >
-                <Text style={styles.carouselButtonText}>›</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.attributionCard}>
-            <Text style={styles.attributionLabel}>Sound attribution</Text>
-            {selectedSound.attribution ? (
-              <Text style={styles.attributionText}>
-                {selectedSound.attribution.title} by {selectedSound.attribution.author}
-                {selectedSound.attribution.license ? ` • ${selectedSound.attribution.license}` : ''}
-              </Text>
-            ) : (
-              <Text style={styles.attributionText}>Royalty-free ambience courtesy of Pixabay.</Text>
-            )}
-          </View>
-
           <Pressable onPress={() => router.replace('/')} style={styles.backLink}>
             <Text style={styles.backLinkText}>Back to login</Text>
           </Pressable>
         </ScrollView>
+        {isSidebarOpen && (
+          <View style={styles.sidebarOverlay} pointerEvents="box-none">
+            <Pressable style={styles.overlayBackdrop} onPress={() => setIsSidebarOpen(false)} />
+            <View style={styles.sidebar}>
+              <Text style={styles.sidebarTitle}>Menu</Text>
+              <Pressable
+                style={styles.sidebarItem}
+                onPress={() => {
+                  setIsSidebarOpen(false);
+                  router.push('/settings');
+                }}
+              >
+                <View style={styles.sidebarIconWrap}>
+                  <MaterialIcons name="settings" size={20} color="#4c7c7a" />
+                </View>
+                <Text style={styles.sidebarLabel}>Settings</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
 
       <Modal
@@ -784,6 +828,27 @@ export default function TimerScreen() {
 const styles = StyleSheet.create({
   gradient: { flex: 1 },
   safeArea: { flex: 1 },
+  headerBar: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 14,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ece4db',
+  },
+  hamburgerButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1d3557',
+  },
   scroll: {
     flexGrow: 1,
     padding: 24,
@@ -806,6 +871,85 @@ const styles = StyleSheet.create({
     color: '#5f6f73',
     maxWidth: 420,
     fontSize: 15,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 32,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#e9e0d0',
+    shadowColor: '#193447',
+    shadowOffset: { width: 0, height: 35 },
+    shadowOpacity: 0.35,
+    shadowRadius: 40,
+    elevation: 10,
+    alignItems: 'center',
+    gap: 12,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '600',
+    color: '#1d3557',
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 16,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: '#7b8f94',
+  },
+  sidebarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 12,
+    flexDirection: 'row',
+  },
+  overlayBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sidebar: {
+    width: 220,
+    height: '100%',
+    backgroundColor: '#fff',
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 20,
+  },
+  sidebarTitle: {
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    color: '#6f6f6f',
+    marginBottom: 12,
+  },
+  sidebarItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    marginBottom: 6,
+  },
+  sidebarIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(76,124,122,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  sidebarLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1f3f3c',
   },
   timerCard: {
     width: '100%',
@@ -1038,6 +1182,74 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#4d6166',
   },
+  soundPickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    justifyContent: 'flex-end',
+  },
+  soundPickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  soundPickerCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  soundPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  soundPickerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1d3557',
+  },
+  soundPickerClose: {
+    padding: 4,
+  },
+  soundPickerList: {
+    paddingBottom: 40,
+    gap: 12,
+  },
+  soundPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e5ddd1',
+  },
+  soundPickerRowActive: {
+    borderColor: '#4c7c7a',
+    backgroundColor: '#f0f7f6',
+  },
+  soundPickerText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1d3557',
+  },
+  soundPickerDescription: {
+    fontSize: 13,
+    color: '#5f6f73',
+  },
+  soundPickerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  soundPickerPreviewButton: {
+    padding: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d4c7b6',
+  },
   attributionCard: {
     width: '100%',
     borderRadius: 20,
@@ -1156,6 +1368,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  soundCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  soundSearch: {
+    padding: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(76,124,122,0.08)',
   },
   carouselButton: {
     width: 44,
